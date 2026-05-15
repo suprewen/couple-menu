@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Couple Menu">
+  <rect width="64" height="64" rx="18" fill="#F8F1DD"/>
+  <path d="M13 28c0-9 7-16 19-16s19 7 19 16c0 13-11 23-19 27-8-4-19-14-19-27Z" fill="#7FB069"/>
+  <circle cx="25" cy="28" r="4" fill="#FFF8E7"/>
+  <circle cx="39" cy="28" r="4" fill="#FFF8E7"/>
+  <path d="M24 40c5 4 11 4 16 0" fill="none" stroke="#3F3328" stroke-width="4" stroke-linecap="round"/>
+  <path d="M20 16c4-7 11-9 18-7" fill="none" stroke="#B98558" stroke-width="5" stroke-linecap="round"/>
+</svg>
