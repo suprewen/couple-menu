@@ -187,7 +187,7 @@ function App() {
     [dishes],
   )
   const bothWantCount = dishes.filter((dish) => dish.preferences.personA === 'want' && dish.preferences.personB === 'want').length
-  const headerSummary = `${dishes.length} 道菜 · ${bothWantCount} 道双方想吃 · ${hiddenAvoidCount} 道已避开`
+  const headerSummary = `${bothWantCount} 道双方想吃 · ${hiddenAvoidCount} 道已避开`
 
   function showToast(message: string) {
     setToast(message)
@@ -479,6 +479,7 @@ function DecisionCard({ decision, isPicking, visibleCount, onConfirm, onLoosen, 
         {decision.reasons.map((reason) => <li key={reason}>{reason}</li>)}
       </ul>
       <DishMeta dish={dish} />
+      {isDecided && <p className="decision-note">记为已吃后，会出现在最近吃过里，之后几天会降低推荐权重。</p>}
       <div className="button-row wrap">
         {isDecided ? (
           <>
@@ -555,7 +556,7 @@ function MenuPage({ dishes, filters, totalCount, onCreate, onEdit, onExport, onF
         <div>
           <p className="eyebrow">菜单维护</p>
           <h2>小菜单</h2>
-          <p>搜索、补充菜品，偏好会影响今晚推荐。</p>
+          <p>搜索、补充菜品，偏好会影响今晚推荐，不是公开评分。</p>
         </div>
         <button className="primary-button" onClick={onCreate}>添加菜品</button>
       </div>
@@ -618,7 +619,6 @@ function DishCard({ dish, onEdit, onFavorite, onSetPreference }: {
         <PreferenceChoice label="我" value={dish.preferences.personA} onChange={(value) => onSetPreference(dish.id, 'personA', value)} />
         <PreferenceChoice label="TA" value={dish.preferences.personB} onChange={(value) => onSetPreference(dish.id, 'personB', value)} />
       </div>
-      <p className="preference-hint">偏好会影响推荐权重，不是公开评分。</p>
       {dish.note && <p className="dish-note">{dish.note}</p>}
       <div className="dish-footer">
         <span>{dish.lastEatenAt ? `上次：${formatDate(dish.lastEatenAt)}` : '还没记录吃过'}</span>
