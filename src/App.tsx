@@ -39,8 +39,6 @@ type DishDraft = {
   category: string
   sourceType: SourceType
   note: string
-  personA: Preference
-  personB: Preference
 }
 
 const STORAGE_KEY = 'couple-menu:v1'
@@ -51,12 +49,6 @@ const sourceLabels: Record<SourceType, string> = {
   delivery: '叫外卖',
   restaurant: '出门吃',
   convenience: '便利店',
-}
-
-const preferenceLabels: Record<Preference, string> = {
-  want: '想吃',
-  neutral: '一般',
-  avoid: '不想吃',
 }
 
 const sourceTypes: SourceType[] = ['home', 'delivery', 'restaurant', 'convenience']
@@ -80,8 +72,6 @@ const emptyDraft: DishDraft = {
   category: '家常',
   sourceType: 'home',
   note: '',
-  personA: 'neutral',
-  personB: 'neutral',
 }
 
 function makeDish(
@@ -133,9 +123,8 @@ function App() {
     () => dishes.filter((dish) => dish.lastEatenAt).sort((a, b) => String(b.lastEatenAt).localeCompare(String(a.lastEatenAt))).slice(0, 5),
     [dishes],
   )
-  const bothWantCount = dishes.filter((dish) => dish.preferences.personA === 'want' && dish.preferences.personB === 'want').length
-  const avoidedCount = dishes.filter((dish) => dish.preferences.personA === 'avoid' || dish.preferences.personB === 'avoid').length
-  const headerSummary = `${bothWantCount} 道双方想吃 · ${avoidedCount} 道默认避开`
+  const favoriteCount = dishes.filter((dish) => dish.favorite).length
+  const headerSummary = `${favoriteCount} 道收藏 · ${recentDishes.length} 道最近吃过`
 
   function showToast(message: string) {
     setToast(message)
@@ -144,7 +133,7 @@ function App() {
   function rollDish() {
     if (todayDishes.length === 0) {
       setDecision({ stage: 'idle', dish: null, reasons: [] })
-      showToast(dishes.length ? '今晚没有合适候选，可以去小菜单调整偏好' : '先加一道常吃的吧')
+      showToast(dishes.length ? '今晚没有合适候选，可以去小菜单添加一道新的' : '先加一道常吃的吧')
       return
     }
     setIsPicking(true)
@@ -172,14 +161,6 @@ function App() {
     setDishes((current) => current.map((dish) => dish.id === dishId ? { ...dish, favorite: !dish.favorite, updatedAt: new Date().toISOString() } : dish))
   }
 
-  function setDishPreference(dishId: string, person: 'personA' | 'personB', preference: Preference) {
-    setDishes((current) => current.map((dish) => dish.id === dishId ? {
-      ...dish,
-      preferences: { ...dish.preferences, [person]: preference },
-      updatedAt: new Date().toISOString(),
-    } : dish))
-  }
-
   function openCreateForm() {
     setEditingDish(null)
     setIsFormOpen(true)
@@ -200,7 +181,7 @@ function App() {
         tags: [],
         sourceType: draft.sourceType,
         note: draft.note.trim(),
-        preferences: { personA: draft.personA, personB: draft.personB },
+        preferences: editingDish.preferences,
         updatedAt: now,
       } : dish))
       showToast('已保存修改')
@@ -214,7 +195,7 @@ function App() {
         budgetLevel: 'medium',
         timeLevel: 'normal',
         note: draft.note.trim(),
-        preferences: { personA: draft.personA, personB: draft.personB },
+        preferences: { personA: 'neutral', personB: 'neutral' },
         favorite: false,
         createdAt: now,
         updatedAt: now,
@@ -289,7 +270,6 @@ function App() {
           onFavorite={toggleFavorite}
           onReset={resetDemoData}
           onSearch={setSearch}
-          onSetPreference={setDishPreference}
         />
       )}
 
@@ -334,7 +314,7 @@ function DecisionCard({ decision, isPicking, totalCount, visibleCount, onConfirm
       <section className="panel decision-card empty-decision">
         <p className="eyebrow">今晚吃什么</p>
         <h2>{isEmptyMenu ? '小菜单还是空的' : '今晚没有合适候选'}</h2>
-        <p>{isEmptyMenu ? '先加一道你们常吃的吧。' : '你们可以去小菜单调整偏好，或添加一道新的。'}</p>
+        <p>{isEmptyMenu ? '先加一道你们常吃的吧。' : '你们可以去小菜单添加一道新的。'}</p>
         <div className="button-row wrap">
           <button className="primary-button" onClick={isEmptyMenu ? onOpenCreate : onOpenMenu}>{isEmptyMenu ? '添加第一道菜' : '去小菜单'}</button>
           {!isEmptyMenu && <button className="ghost-button" onClick={onOpenCreate}>添加菜品</button>}
@@ -348,7 +328,7 @@ function DecisionCard({ decision, isPicking, totalCount, visibleCount, onConfirm
       <section className="panel decision-card">
         <p className="eyebrow">今晚吃什么</p>
         <h2>{isPicking ? '正在翻菜单…' : '今晚想怎么吃？'}</h2>
-        <p>我会避开你们不想吃的菜，再从小菜单里挑一个。</p>
+        <p>我会从你们的小菜单里挑一个刚刚好的选择。</p>
         <div className="decision-count">{visibleCount} 道可选</div>
         <button className="primary-button big-cta" onClick={onRoll} disabled={isPicking}>{isPicking ? '马上就好' : '帮我们选一个'}</button>
       </section>
@@ -385,7 +365,7 @@ function DecisionCard({ decision, isPicking, totalCount, visibleCount, onConfirm
   )
 }
 
-function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, onReset, onSearch, onSetPreference }: {
+function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, onReset, onSearch }: {
   dishes: Dish[]
   search: string
   totalCount: number
@@ -394,7 +374,6 @@ function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, on
   onFavorite: (dishId: string) => void
   onReset: () => void
   onSearch: (value: string) => void
-  onSetPreference: (dishId: string, person: 'personA' | 'personB', preference: Preference) => void
 }) {
   const hasSearch = Boolean(search.trim())
   return (
@@ -403,7 +382,7 @@ function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, on
         <div>
           <p className="eyebrow">菜单维护</p>
           <h2>小菜单</h2>
-          <p>维护你们常吃的菜。偏好会影响今晚推荐，不是公开评分。</p>
+          <p>维护你们常吃的菜。只保留菜系和备注这些轻量信息。</p>
         </div>
         <button className="primary-button" onClick={onCreate}>添加菜品</button>
       </div>
@@ -418,7 +397,7 @@ function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, on
       <div className="list-summary">{hasSearch ? `搜索到 ${dishes.length} 道菜` : `共 ${totalCount} 道菜`}</div>
       {dishes.length ? (
         <div className="dish-grid">
-          {dishes.map((dish) => <DishCard key={dish.id} dish={dish} onEdit={onEdit} onFavorite={onFavorite} onSetPreference={onSetPreference} />)}
+          {dishes.map((dish) => <DishCard key={dish.id} dish={dish} onEdit={onEdit} onFavorite={onFavorite} />)}
         </div>
       ) : (
         <div className="panel"><EmptyState title={hasSearch ? '没找到这道菜' : '菜单还是空的'} text={hasSearch ? '换个关键词试试，或直接添加新菜。' : '先加一道你们常吃的吧。'} action={hasSearch ? '添加菜品' : '添加第一道菜'} onAction={onCreate} /></div>
@@ -432,11 +411,10 @@ function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, on
   )
 }
 
-function DishCard({ dish, onEdit, onFavorite, onSetPreference }: {
+function DishCard({ dish, onEdit, onFavorite }: {
   dish: Dish
   onEdit: (dish: Dish) => void
   onFavorite: (dishId: string) => void
-  onSetPreference: (dishId: string, person: 'personA' | 'personB', preference: Preference) => void
 }) {
   return (
     <article className="dish-card">
@@ -446,29 +424,12 @@ function DishCard({ dish, onEdit, onFavorite, onSetPreference }: {
       </div>
       <h3>{dish.name}</h3>
       <DishMetaLine dish={dish} />
-      <div className="pref-editor" aria-label="双方偏好">
-        <PreferenceChoice label="我" value={dish.preferences.personA} onChange={(value) => onSetPreference(dish.id, 'personA', value)} />
-        <PreferenceChoice label="TA" value={dish.preferences.personB} onChange={(value) => onSetPreference(dish.id, 'personB', value)} />
-      </div>
       {dish.note && <p className="dish-note">{dish.note}</p>}
       <div className="dish-footer">
         <span>{dish.lastEatenAt ? `上次：${formatDate(dish.lastEatenAt)}` : '还没记录吃过'}</span>
         <button className="text-button" onClick={() => onEdit(dish)}>编辑</button>
       </div>
     </article>
-  )
-}
-
-function PreferenceChoice({ label, value, onChange }: { label: string; value: Preference; onChange: (value: Preference) => void }) {
-  return (
-    <div className="preference-choice">
-      <span>{label}</span>
-      <div>
-        {preferences.map((option) => (
-          <button key={option} className={value === option ? `active ${option}` : ''} onClick={() => onChange(option)}>{preferenceLabels[option]}</button>
-        ))}
-      </div>
-    </div>
   )
 }
 
@@ -509,8 +470,6 @@ function DishForm({ dish, onClose, onSave, onDelete }: {
     category: dish.category,
     sourceType: dish.sourceType,
     note: dish.note,
-    personA: dish.preferences.personA,
-    personB: dish.preferences.personB,
   } : emptyDraft)
 
   function update<K extends keyof DishDraft>(key: K, value: DishDraft[K]) {
@@ -539,10 +498,6 @@ function DishForm({ dish, onClose, onSave, onDelete }: {
           <label className="field-label">菜名<input required value={draft.name} onChange={(event) => update('name', event.target.value)} placeholder="例如：番茄牛腩饭、楼下麻辣烫" /></label>
           <label className="field-label">怎么吃<select value={draft.sourceType} onChange={(event) => update('sourceType', event.target.value as SourceType)}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label className="field-label">菜系<select value={draft.category} onChange={(event) => update('category', event.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
-          <div className="form-grid two">
-            <label className="field-label">我的偏好<select value={draft.personA} onChange={(event) => update('personA', event.target.value as Preference)}>{Object.entries(preferenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-            <label className="field-label">TA 的偏好<select value={draft.personB} onChange={(event) => update('personB', event.target.value as Preference)}>{Object.entries(preferenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          </div>
         </section>
 
         <section className="form-section optional-section">
@@ -627,7 +582,7 @@ function isPreference(value: unknown): value is Preference {
 }
 
 function filterTodayDishes(dishes: Dish[]) {
-  return dishes.filter((dish) => dish.preferences.personA !== 'avoid' && dish.preferences.personB !== 'avoid')
+  return dishes
 }
 
 function filterMenuDishes(dishes: Dish[], search: string) {
@@ -644,10 +599,7 @@ function pickWeightedDish(dishes: Dish[]) {
 
 function scoreDish(dish: Dish) {
   let score = 5
-  const { personA, personB } = dish.preferences
-  if (personA === 'want' && personB === 'want') score += 5
-  else if (personA === 'want' || personB === 'want') score += 2
-  if (dish.favorite) score += 1
+  if (dish.favorite) score += 3
   if (dish.lastEatenAt) {
     const days = (Date.now() - new Date(dish.lastEatenAt).getTime()) / 86400000
     if (days < 3) score -= 4
@@ -658,9 +610,6 @@ function scoreDish(dish: Dish) {
 
 function buildReasons(dish: Dish) {
   const reasons: string[] = []
-  if (dish.preferences.personA === 'want' && dish.preferences.personB === 'want') reasons.push('你们都标记过想吃')
-  else if (dish.preferences.personA === 'want') reasons.push('更照顾你的口味')
-  else if (dish.preferences.personB === 'want') reasons.push('更照顾 TA 的口味')
   if (!dish.lastEatenAt) reasons.push('最近还没吃过')
   else {
     const days = Math.max(1, Math.floor((Date.now() - new Date(dish.lastEatenAt).getTime()) / 86400000))
