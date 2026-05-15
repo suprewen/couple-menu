@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import './App.css'
 
 type Preference = 'want' | 'neutral' | 'avoid'
@@ -6,10 +7,6 @@ type Tab = 'today' | 'menu'
 type SourceType = 'home' | 'delivery' | 'restaurant' | 'convenience'
 type BudgetLevel = 'low' | 'medium' | 'high'
 type TimeLevel = 'quick' | 'normal' | 'slow'
-type CompanionMode = 'both' | 'personA' | 'personB'
-type AvoidMode = 'avoid' | 'relaxed'
-type SceneMode = 'any' | SourceType
-type SpeedMode = 'any' | 'quick' | 'normal'
 type DecisionStage = 'idle' | 'candidate' | 'decided'
 
 type Dish = {
@@ -31,20 +28,6 @@ type Dish = {
   updatedAt: string
 }
 
-type TodayConditions = {
-  companion: CompanionMode
-  avoidMode: AvoidMode
-  scene: SceneMode
-  speed: SpeedMode
-}
-
-type MenuFilters = {
-  search: string
-  category: string
-  tag: string
-  preference: 'all' | 'bothWant' | 'personAWant' | 'personBWant' | 'avoidOnly'
-}
-
 type Decision = {
   stage: DecisionStage
   dish: Dish | null
@@ -54,10 +37,7 @@ type Decision = {
 type DishDraft = {
   name: string
   category: string
-  tagsText: string
   sourceType: SourceType
-  budgetLevel: BudgetLevel
-  timeLevel: TimeLevel
   note: string
   personA: Preference
   personB: Preference
@@ -65,25 +45,12 @@ type DishDraft = {
 
 const STORAGE_KEY = 'couple-menu:v1'
 const categories = ['家常', '外卖', '下馆子', '轻食', '甜品', '便利店']
-const quickTags = ['快手', '便宜', '清淡', '辣', '热乎', '健康', '米饭', '面食', '汤汤水水']
 
 const sourceLabels: Record<SourceType, string> = {
   home: '在家做',
   delivery: '叫外卖',
   restaurant: '出门吃',
   convenience: '便利店',
-}
-
-const budgetLabels: Record<BudgetLevel, string> = {
-  low: '省一点',
-  medium: '正常花',
-  high: '吃好点',
-}
-
-const timeLabels: Record<TimeLevel, string> = {
-  quick: '快一点',
-  normal: '不赶时间',
-  slow: '慢慢吃',
 }
 
 const preferenceLabels: Record<Preference, string> = {
@@ -96,20 +63,6 @@ const sourceTypes: SourceType[] = ['home', 'delivery', 'restaurant', 'convenienc
 const budgetLevels: BudgetLevel[] = ['low', 'medium', 'high']
 const timeLevels: TimeLevel[] = ['quick', 'normal', 'slow']
 const preferences: Preference[] = ['want', 'neutral', 'avoid']
-
-const defaultConditions: TodayConditions = {
-  companion: 'both',
-  avoidMode: 'avoid',
-  scene: 'any',
-  speed: 'any',
-}
-
-const defaultMenuFilters: MenuFilters = {
-  search: '',
-  category: '全部',
-  tag: '全部',
-  preference: 'all',
-}
 
 const defaultDishes: Dish[] = [
   makeDish('番茄牛腩饭', '家常', ['热乎', '米饭', '下饭'], 'home', 'medium', 'normal', '适合周末多炖一点，第二天也好吃。', 'want', 'want', true, daysAgo(8)),
@@ -125,10 +78,7 @@ const defaultDishes: Dish[] = [
 const emptyDraft: DishDraft = {
   name: '',
   category: '家常',
-  tagsText: '',
   sourceType: 'home',
-  budgetLevel: 'medium',
-  timeLevel: 'normal',
   note: '',
   personA: 'neutral',
   personB: 'neutral',
@@ -160,9 +110,7 @@ function daysAgo(days: number) {
 function App() {
   const [tab, setTab] = useState<Tab>('today')
   const [dishes, setDishes] = useState<Dish[]>(() => loadDishes())
-  const [conditions, setConditions] = useState<TodayConditions>(defaultConditions)
-  const [isConditionOpen, setIsConditionOpen] = useState(false)
-  const [menuFilters, setMenuFilters] = useState<MenuFilters>(defaultMenuFilters)
+  const [search, setSearch] = useState('')
   const [decision, setDecision] = useState<Decision>({ stage: 'idle', dish: null, reasons: [] })
   const [isPicking, setIsPicking] = useState(false)
   const [editingDish, setEditingDish] = useState<Dish | null>(null)
@@ -179,48 +127,30 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  const todayDishes = useMemo(() => filterTodayDishes(dishes, conditions), [dishes, conditions])
-  const hiddenAvoidCount = useMemo(() => conditions.avoidMode === 'avoid' ? dishes.filter((dish) => dish.preferences.personA === 'avoid' || dish.preferences.personB === 'avoid').length : 0, [dishes, conditions.avoidMode])
-  const menuDishes = useMemo(() => filterMenuDishes(dishes, menuFilters), [dishes, menuFilters])
+  const todayDishes = useMemo(() => filterTodayDishes(dishes), [dishes])
+  const menuDishes = useMemo(() => filterMenuDishes(dishes, search), [dishes, search])
   const recentDishes = useMemo(
     () => dishes.filter((dish) => dish.lastEatenAt).sort((a, b) => String(b.lastEatenAt).localeCompare(String(a.lastEatenAt))).slice(0, 5),
     [dishes],
   )
   const bothWantCount = dishes.filter((dish) => dish.preferences.personA === 'want' && dish.preferences.personB === 'want').length
-  const headerSummary = `${bothWantCount} 道双方想吃 · ${hiddenAvoidCount} 道已避开`
+  const avoidedCount = dishes.filter((dish) => dish.preferences.personA === 'avoid' || dish.preferences.personB === 'avoid').length
+  const headerSummary = `${bothWantCount} 道双方想吃 · ${avoidedCount} 道默认避开`
 
   function showToast(message: string) {
     setToast(message)
   }
 
-  function updateConditions(next: Partial<TodayConditions>) {
-    setConditions((current) => ({ ...current, ...next }))
-    setDecision({ stage: 'idle', dish: null, reasons: [] })
-  }
-
-  function resetConditions() {
-    setConditions(defaultConditions)
-    setDecision({ stage: 'idle', dish: null, reasons: [] })
-    showToast('已回到默认条件')
-  }
-
-  function loosenConditions() {
-    setConditions((current) => ({ ...current, companion: 'both', avoidMode: 'avoid', scene: 'any', speed: 'any' }))
-    setDecision({ stage: 'idle', dish: null, reasons: [] })
-    showToast('已放宽到日常推荐')
-  }
-
   function rollDish() {
     if (todayDishes.length === 0) {
       setDecision({ stage: 'idle', dish: null, reasons: [] })
-      setIsConditionOpen(true)
-      showToast('这组条件下没有菜啦，可以放宽一点')
+      showToast(dishes.length ? '今晚没有合适候选，可以去小菜单调整偏好' : '先加一道常吃的吧')
       return
     }
     setIsPicking(true)
     window.setTimeout(() => {
-      const dish = pickWeightedDish(todayDishes, conditions) ?? todayDishes[0]
-      setDecision({ stage: 'candidate', dish, reasons: buildReasons(dish, conditions) })
+      const dish = pickWeightedDish(todayDishes) ?? todayDishes[0]
+      setDecision({ stage: 'candidate', dish, reasons: buildReasons(dish) })
       setIsPicking(false)
     }, 420)
   }
@@ -262,16 +192,13 @@ function App() {
 
   function saveDish(draft: DishDraft) {
     const now = new Date().toISOString()
-    const tags = draft.tagsText.split(/[，,\s]+/).map((tag) => tag.trim()).filter(Boolean)
     if (editingDish) {
       setDishes((current) => current.map((dish) => dish.id === editingDish.id ? {
         ...dish,
         name: draft.name.trim(),
         category: draft.category,
-        tags,
+        tags: [],
         sourceType: draft.sourceType,
-        budgetLevel: draft.budgetLevel,
-        timeLevel: draft.timeLevel,
         note: draft.note.trim(),
         preferences: { personA: draft.personA, personB: draft.personB },
         updatedAt: now,
@@ -282,10 +209,10 @@ function App() {
         id: crypto.randomUUID(),
         name: draft.name.trim(),
         category: draft.category,
-        tags,
+        tags: [],
         sourceType: draft.sourceType,
-        budgetLevel: draft.budgetLevel,
-        timeLevel: draft.timeLevel,
+        budgetLevel: 'medium',
+        timeLevel: 'normal',
         note: draft.note.trim(),
         preferences: { personA: draft.personA, personB: draft.personB },
         favorite: false,
@@ -307,37 +234,11 @@ function App() {
     showToast('已删除这道菜')
   }
 
-  function exportData() {
-    const blob = new Blob([JSON.stringify(dishes, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `couple-menu-${new Date().toISOString().slice(0, 10)}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
-  function importData(file: File | undefined) {
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      try {
-        const parsed = parseDishArray(JSON.parse(String(reader.result)))
-        if (parsed.length === 0) throw new Error('invalid')
-        setDishes(parsed)
-        setDecision({ stage: 'idle', dish: null, reasons: [] })
-        showToast('菜单已导入')
-      } catch {
-        showToast('导入失败，请检查 JSON 文件')
-      }
-    }
-    reader.readAsText(file)
-  }
-
   function resetDemoData() {
     if (!window.confirm('这会用示例数据覆盖当前本地菜单，确定吗？')) return
     setDishes(defaultDishes)
     setDecision({ stage: 'idle', dish: null, reasons: [] })
+    setSearch('')
     showToast('已恢复示例菜单')
   }
 
@@ -368,35 +269,27 @@ function App() {
 
       {tab === 'today' ? (
         <TodayPage
-          conditions={conditions}
           decision={decision}
-          hiddenAvoidCount={hiddenAvoidCount}
-          isConditionOpen={isConditionOpen}
           isPicking={isPicking}
           recentDishes={recentDishes}
+          totalCount={dishes.length}
           visibleCount={todayDishes.length}
           onConfirm={confirmDecision}
-          onLoosen={loosenConditions}
           onOpenCreate={openCreateForm}
-          onReset={resetConditions}
+          onOpenMenu={() => setTab('menu')}
           onRoll={rollDish}
-          onToggleCondition={() => setIsConditionOpen((current) => !current)}
-          onUpdateConditions={updateConditions}
         />
       ) : (
         <MenuPage
           dishes={menuDishes}
-          filters={menuFilters}
+          search={search}
           totalCount={dishes.length}
           onCreate={openCreateForm}
           onEdit={openEditForm}
-          onExport={exportData}
           onFavorite={toggleFavorite}
-          onImport={importData}
           onReset={resetDemoData}
+          onSearch={setSearch}
           onSetPreference={setDishPreference}
-          onUpdateFilters={(next) => setMenuFilters((current) => ({ ...current, ...next }))}
-          onResetFilters={() => setMenuFilters(defaultMenuFilters)}
         />
       )}
 
@@ -406,50 +299,45 @@ function App() {
   )
 }
 
-function TodayPage({ conditions, decision, hiddenAvoidCount, isConditionOpen, isPicking, recentDishes, visibleCount, onConfirm, onLoosen, onOpenCreate, onReset, onRoll, onToggleCondition, onUpdateConditions }: {
-  conditions: TodayConditions
+function TodayPage({ decision, isPicking, recentDishes, totalCount, visibleCount, onConfirm, onOpenCreate, onOpenMenu, onRoll }: {
   decision: Decision
-  hiddenAvoidCount: number
-  isConditionOpen: boolean
   isPicking: boolean
   recentDishes: Dish[]
+  totalCount: number
   visibleCount: number
   onConfirm: (markEaten?: boolean) => void
-  onLoosen: () => void
   onOpenCreate: () => void
-  onReset: () => void
+  onOpenMenu: () => void
   onRoll: () => void
-  onToggleCondition: () => void
-  onUpdateConditions: (next: Partial<TodayConditions>) => void
 }) {
   return (
     <section className="today-stack">
-      <DecisionCard decision={decision} isPicking={isPicking} visibleCount={visibleCount} onConfirm={onConfirm} onLoosen={onLoosen} onOpenCreate={onOpenCreate} onRoll={onRoll} />
-      <ConditionSummary conditions={conditions} hiddenAvoidCount={hiddenAvoidCount} isOpen={isConditionOpen} visibleCount={visibleCount} onToggle={onToggleCondition} />
-      {isConditionOpen && <ConditionPanel conditions={conditions} onReset={onReset} onUpdate={onUpdateConditions} />}
+      <DecisionCard decision={decision} isPicking={isPicking} totalCount={totalCount} visibleCount={visibleCount} onConfirm={onConfirm} onOpenCreate={onOpenCreate} onOpenMenu={onOpenMenu} onRoll={onRoll} />
       <RecentCard dishes={recentDishes} />
     </section>
   )
 }
 
-function DecisionCard({ decision, isPicking, visibleCount, onConfirm, onLoosen, onOpenCreate, onRoll }: {
+function DecisionCard({ decision, isPicking, totalCount, visibleCount, onConfirm, onOpenCreate, onOpenMenu, onRoll }: {
   decision: Decision
   isPicking: boolean
+  totalCount: number
   visibleCount: number
   onConfirm: (markEaten?: boolean) => void
-  onLoosen: () => void
   onOpenCreate: () => void
+  onOpenMenu: () => void
   onRoll: () => void
 }) {
   if (!visibleCount) {
+    const isEmptyMenu = totalCount === 0
     return (
       <section className="panel decision-card empty-decision">
         <p className="eyebrow">今晚吃什么</p>
-        <h2>这组条件下没有候选</h2>
-        <p>可以放宽条件，或者先加一道常吃的。</p>
+        <h2>{isEmptyMenu ? '小菜单还是空的' : '今晚没有合适候选'}</h2>
+        <p>{isEmptyMenu ? '先加一道你们常吃的吧。' : '你们可以去小菜单调整偏好，或添加一道新的。'}</p>
         <div className="button-row wrap">
-          <button className="secondary-button" onClick={onLoosen}>放宽一点</button>
-          <button className="ghost-button" onClick={onOpenCreate}>添加菜品</button>
+          <button className="primary-button" onClick={isEmptyMenu ? onOpenCreate : onOpenMenu}>{isEmptyMenu ? '添加第一道菜' : '去小菜单'}</button>
+          {!isEmptyMenu && <button className="ghost-button" onClick={onOpenCreate}>添加菜品</button>}
         </div>
       </section>
     )
@@ -460,8 +348,8 @@ function DecisionCard({ decision, isPicking, visibleCount, onConfirm, onLoosen, 
       <section className="panel decision-card">
         <p className="eyebrow">今晚吃什么</p>
         <h2>{isPicking ? '正在翻菜单…' : '今晚想怎么吃？'}</h2>
-        <p>我会先避开不想吃的菜，再从候选里挑一个。</p>
-        <div className="decision-count">{visibleCount} 道候选</div>
+        <p>我会避开你们不想吃的菜，再从小菜单里挑一个。</p>
+        <div className="decision-count">{visibleCount} 道可选</div>
         <button className="primary-button big-cta" onClick={onRoll} disabled={isPicking}>{isPicking ? '马上就好' : '帮我们选一个'}</button>
       </section>
     )
@@ -478,7 +366,7 @@ function DecisionCard({ decision, isPicking, visibleCount, onConfirm, onLoosen, 
       <ul>
         {decision.reasons.map((reason) => <li key={reason}>{reason}</li>)}
       </ul>
-      <DishMeta dish={dish} />
+      <DishMetaLine dish={dish} showNote />
       {isDecided && <p className="decision-note">记为已吃后，会出现在最近吃过里，之后几天会降低推荐权重。</p>}
       <div className="button-row wrap">
         {isDecided ? (
@@ -497,66 +385,25 @@ function DecisionCard({ decision, isPicking, visibleCount, onConfirm, onLoosen, 
   )
 }
 
-function ConditionSummary({ conditions, hiddenAvoidCount, isOpen, visibleCount, onToggle }: {
-  conditions: TodayConditions
-  hiddenAvoidCount: number
-  isOpen: boolean
-  visibleCount: number
-  onToggle: () => void
-}) {
-  return (
-    <button className="condition-summary" onClick={onToggle} aria-expanded={isOpen}>
-      <span>{visibleCount} 道候选</span>
-      <span>{summarizeConditions(conditions, hiddenAvoidCount)}</span>
-      <strong>{isOpen ? '收起条件' : '调整条件'}</strong>
-    </button>
-  )
-}
-
-function ConditionPanel({ conditions, onReset, onUpdate }: {
-  conditions: TodayConditions
-  onReset: () => void
-  onUpdate: (next: Partial<TodayConditions>) => void
-}) {
-  return (
-    <section className="panel condition-panel">
-      <div className="section-heading compact">
-        <span>🌿</span>
-        <div>
-          <h2>今晚的条件</h2>
-          <p>用日常说法就好，不用精确筛选。</p>
-        </div>
-      </div>
-      <SegmentedGroup label="照顾谁的口味" values={[['both', '我和 TA 都可以'], ['personA', '照顾我'], ['personB', '照顾 TA']]} active={conditions.companion} onChange={(value) => onUpdate({ companion: value as CompanionMode })} />
-      <SegmentedGroup label="忌口策略" values={[['avoid', '避开任一方不想吃'], ['relaxed', '今晚先不管忌口']]} active={conditions.avoidMode} onChange={(value) => onUpdate({ avoidMode: value as AvoidMode })} />
-      <SegmentedGroup label="吃饭场景" values={[['any', '都行'], ['home', '在家'], ['delivery', '外卖'], ['restaurant', '出门'], ['convenience', '便利店']]} active={conditions.scene} onChange={(value) => onUpdate({ scene: value as SceneMode })} />
-      <SegmentedGroup label="时间" values={[['any', '都行'], ['quick', '快一点'], ['normal', '不着急']]} active={conditions.speed} onChange={(value) => onUpdate({ speed: value as SpeedMode })} />
-      <button className="ghost-button" onClick={onReset}>清空条件</button>
-    </section>
-  )
-}
-
-function MenuPage({ dishes, filters, totalCount, onCreate, onEdit, onExport, onFavorite, onImport, onReset, onResetFilters, onSetPreference, onUpdateFilters }: {
+function MenuPage({ dishes, search, totalCount, onCreate, onEdit, onFavorite, onReset, onSearch, onSetPreference }: {
   dishes: Dish[]
-  filters: MenuFilters
+  search: string
   totalCount: number
   onCreate: () => void
   onEdit: (dish: Dish) => void
-  onExport: () => void
   onFavorite: (dishId: string) => void
-  onImport: (file: File | undefined) => void
   onReset: () => void
-  onResetFilters: () => void
+  onSearch: (value: string) => void
   onSetPreference: (dishId: string, person: 'personA' | 'personB', preference: Preference) => void
-  onUpdateFilters: (next: Partial<MenuFilters>) => void
 }) {
+  const hasSearch = Boolean(search.trim())
   return (
     <section className="menu-column">
       <div className="panel menu-toolbar">
         <div>
           <p className="eyebrow">菜单维护</p>
           <h2>小菜单</h2>
-          <p>搜索、补充菜品，偏好会影响今晚推荐，不是公开评分。</p>
+          <p>维护你们常吃的菜。偏好会影响今晚推荐，不是公开评分。</p>
         </div>
         <button className="primary-button" onClick={onCreate}>添加菜品</button>
       </div>
@@ -564,39 +411,23 @@ function MenuPage({ dishes, filters, totalCount, onCreate, onEdit, onExport, onF
       <section className="panel maintenance-panel">
         <label className="field-label search-field">
           搜索菜品
-          <input value={filters.search} onChange={(event) => onUpdateFilters({ search: event.target.value })} placeholder="搜菜名、口味、备注" />
+          <input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="搜菜名、菜系、备注" />
         </label>
-        <details>
-          <summary>筛选列表</summary>
-          <ChipGroup label="分类" values={['全部', ...categories]} active={filters.category} onChange={(value) => onUpdateFilters({ category: value })} />
-          <ChipGroup label="特点" values={['全部', ...quickTags]} active={filters.tag} onChange={(value) => onUpdateFilters({ tag: value })} />
-          <ChipGroup
-            label="偏好"
-            values={['all', 'bothWant', 'personAWant', 'personBWant', 'avoidOnly']}
-            getLabel={(value) => ({ all: '全部', bothWant: '双方想吃', personAWant: '我想吃', personBWant: 'TA 想吃', avoidOnly: '有人不想吃' }[value] ?? value)}
-            active={filters.preference}
-            onChange={(value) => onUpdateFilters({ preference: value as MenuFilters['preference'] })}
-          />
-          <button className="ghost-button" onClick={onResetFilters}>重置列表筛选</button>
-        </details>
-        <details>
-          <summary>数据管理</summary>
-          <div className="button-row wrap tool-row">
-            <button className="ghost-button" onClick={onExport}>导出 JSON</button>
-            <label className="import-button">导入 JSON<input type="file" accept="application/json" onChange={(event) => onImport(event.target.files?.[0])} /></label>
-            <button className="danger-button" onClick={onReset}>恢复示例</button>
-          </div>
-        </details>
       </section>
 
-      <div className="list-summary">当前显示 {dishes.length} / {totalCount} 道菜</div>
+      <div className="list-summary">{hasSearch ? `搜索到 ${dishes.length} 道菜` : `共 ${totalCount} 道菜`}</div>
       {dishes.length ? (
         <div className="dish-grid">
           {dishes.map((dish) => <DishCard key={dish.id} dish={dish} onEdit={onEdit} onFavorite={onFavorite} onSetPreference={onSetPreference} />)}
         </div>
       ) : (
-        <div className="panel"><EmptyState title="菜单还是空的" text="先加一道你们常吃的吧。" action="添加第一道菜" onAction={onCreate} /></div>
+        <div className="panel"><EmptyState title={hasSearch ? '没找到这道菜' : '菜单还是空的'} text={hasSearch ? '换个关键词试试，或直接添加新菜。' : '先加一道你们常吃的吧。'} action={hasSearch ? '添加菜品' : '添加第一道菜'} onAction={onCreate} /></div>
       )}
+
+      <section className="panel reset-panel">
+        <p>想回到初始状态时，可以恢复示例菜单。</p>
+        <button className="danger-button" onClick={onReset}>恢复示例菜单</button>
+      </section>
     </section>
   )
 }
@@ -614,7 +445,7 @@ function DishCard({ dish, onEdit, onFavorite, onSetPreference }: {
         <button className="icon-button" onClick={() => onFavorite(dish.id)} aria-label={dish.favorite ? '取消收藏' : '收藏'}>{dish.favorite ? '★' : '☆'}</button>
       </div>
       <h3>{dish.name}</h3>
-      <DishMeta dish={dish} />
+      <DishMetaLine dish={dish} />
       <div className="pref-editor" aria-label="双方偏好">
         <PreferenceChoice label="我" value={dish.preferences.personA} onChange={(value) => onSetPreference(dish.id, 'personA', value)} />
         <PreferenceChoice label="TA" value={dish.preferences.personB} onChange={(value) => onSetPreference(dish.id, 'personB', value)} />
@@ -658,46 +489,11 @@ function RecentCard({ dishes }: { dishes: Dish[] }) {
   )
 }
 
-function DishMeta({ dish }: { dish: Dish }) {
+function DishMetaLine({ dish, showNote = false }: { dish: Dish; showNote?: boolean }) {
   return (
-    <div className="tag-list">
-      <span>{sourceLabels[dish.sourceType]}</span>
-      <span>{budgetLabels[dish.budgetLevel]}</span>
-      <span>{timeLabels[dish.timeLevel]}</span>
-      {dish.tags.map((tag) => <span key={tag}>{tag}</span>)}
-    </div>
-  )
-}
-
-function SegmentedGroup({ label, values, active, onChange }: {
-  label: string
-  values: [string, string][]
-  active: string
-  onChange: (value: string) => void
-}) {
-  return (
-    <div className="segmented-group">
-      <span>{label}</span>
-      <div>
-        {values.map(([value, text]) => <button key={value} className={active === value ? 'active' : ''} onClick={() => onChange(value)}>{text}</button>)}
-      </div>
-    </div>
-  )
-}
-
-function ChipGroup<T extends string>({ label, values, active, onChange, getLabel }: {
-  label: string
-  values: T[]
-  active: T | string
-  onChange: (value: T) => void
-  getLabel?: (value: T) => string
-}) {
-  return (
-    <div className="chip-group">
-      <span>{label}</span>
-      <div>
-        {values.map((value) => <button key={value} className={active === value ? 'active' : ''} onClick={() => onChange(value)}>{getLabel ? getLabel(value) : value}</button>)}
-      </div>
+    <div className="meta-line">
+      <span>{sourceLabels[dish.sourceType]} · {dish.category}</span>
+      {showNote && dish.note && <small>{dish.note}</small>}
     </div>
   )
 }
@@ -711,21 +507,17 @@ function DishForm({ dish, onClose, onSave, onDelete }: {
   const [draft, setDraft] = useState<DishDraft>(() => dish ? {
     name: dish.name,
     category: dish.category,
-    tagsText: dish.tags.join('，'),
     sourceType: dish.sourceType,
-    budgetLevel: dish.budgetLevel,
-    timeLevel: dish.timeLevel,
     note: dish.note,
     personA: dish.preferences.personA,
     personB: dish.preferences.personB,
   } : emptyDraft)
-  const [showOptional, setShowOptional] = useState(Boolean(dish))
 
   function update<K extends keyof DishDraft>(key: K, value: DishDraft[K]) {
     setDraft((current) => ({ ...current, [key]: value }))
   }
 
-  function submit(event: React.FormEvent) {
+  function submit(event: FormEvent) {
     event.preventDefault()
     if (!draft.name.trim()) return
     onSave(draft)
@@ -746,25 +538,17 @@ function DishForm({ dish, onClose, onSave, onDelete }: {
           <h3>基础信息</h3>
           <label className="field-label">菜名<input required value={draft.name} onChange={(event) => update('name', event.target.value)} placeholder="例如：番茄牛腩饭、楼下麻辣烫" /></label>
           <label className="field-label">怎么吃<select value={draft.sourceType} onChange={(event) => update('sourceType', event.target.value as SourceType)}>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="field-label">菜系<select value={draft.category} onChange={(event) => update('category', event.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
           <div className="form-grid two">
             <label className="field-label">我的偏好<select value={draft.personA} onChange={(event) => update('personA', event.target.value as Preference)}>{Object.entries(preferenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
             <label className="field-label">TA 的偏好<select value={draft.personB} onChange={(event) => update('personB', event.target.value as Preference)}>{Object.entries(preferenceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           </div>
         </section>
 
-        <button type="button" className="ghost-button optional-toggle" onClick={() => setShowOptional((current) => !current)}>{showOptional ? '收起可选信息' : '补充可选信息'}</button>
-        {showOptional && (
-          <section className="form-section optional-section">
-            <h3>可选信息</h3>
-            <label className="field-label">分类<select value={draft.category} onChange={(event) => update('category', event.target.value)}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
-            <label className="field-label">特点<input value={draft.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="辣，快手，热乎" /></label>
-            <div className="form-grid two">
-              <label className="field-label">预算<select value={draft.budgetLevel} onChange={(event) => update('budgetLevel', event.target.value as BudgetLevel)}>{Object.entries(budgetLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-              <label className="field-label">时间<select value={draft.timeLevel} onChange={(event) => update('timeLevel', event.target.value as TimeLevel)}>{Object.entries(timeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-            </div>
-            <label className="field-label">备注<textarea value={draft.note} onChange={(event) => update('note', event.target.value)} placeholder="店名、做法、忌口，或者你们的小暗号" /></label>
-          </section>
-        )}
+        <section className="form-section optional-section">
+          <h3>可选信息</h3>
+          <label className="field-label">备注<textarea value={draft.note} onChange={(event) => update('note', event.target.value)} placeholder="店名、做法、忌口，或者你们的小暗号。" /></label>
+        </section>
 
         <div className="form-actions">
           {dish && <button type="button" className="danger-button" onClick={() => onDelete(dish.id)}>删除菜品</button>}
@@ -842,48 +626,27 @@ function isPreference(value: unknown): value is Preference {
   return typeof value === 'string' && preferences.includes(value as Preference)
 }
 
-function filterTodayDishes(dishes: Dish[], conditions: TodayConditions) {
-  return dishes.filter((dish) => {
-    const { personA, personB } = dish.preferences
-    const respectsAvoid = conditions.avoidMode === 'relaxed' || (personA !== 'avoid' && personB !== 'avoid')
-    const matchesCompanion = conditions.companion === 'both' || dish.preferences[conditions.companion] !== 'avoid'
-    const matchesScene = conditions.scene === 'any' || dish.sourceType === conditions.scene
-    const matchesSpeed = conditions.speed === 'any' || (conditions.speed === 'quick' ? dish.timeLevel === 'quick' : dish.timeLevel !== 'quick')
-    return respectsAvoid && matchesCompanion && matchesScene && matchesSpeed
-  })
+function filterTodayDishes(dishes: Dish[]) {
+  return dishes.filter((dish) => dish.preferences.personA !== 'avoid' && dish.preferences.personB !== 'avoid')
 }
 
-function filterMenuDishes(dishes: Dish[], filters: MenuFilters) {
-  const keyword = filters.search.trim().toLowerCase()
-  return dishes.filter((dish) => {
-    const matchesSearch = !keyword || [dish.name, dish.category, dish.note, ...dish.tags].some((item) => item.toLowerCase().includes(keyword))
-    const matchesCategory = filters.category === '全部' || dish.category === filters.category
-    const matchesTag = filters.tag === '全部' || dish.tags.includes(filters.tag) || sourceLabels[dish.sourceType] === filters.tag || timeLabels[dish.timeLevel] === filters.tag || budgetLabels[dish.budgetLevel] === filters.tag
-    const { personA, personB } = dish.preferences
-    const matchesPreference =
-      filters.preference === 'all' ||
-      (filters.preference === 'bothWant' && personA === 'want' && personB === 'want') ||
-      (filters.preference === 'personAWant' && personA === 'want') ||
-      (filters.preference === 'personBWant' && personB === 'want') ||
-      (filters.preference === 'avoidOnly' && (personA === 'avoid' || personB === 'avoid'))
-    return matchesSearch && matchesCategory && matchesTag && matchesPreference
-  })
+function filterMenuDishes(dishes: Dish[], search: string) {
+  const keyword = search.trim().toLowerCase()
+  if (!keyword) return dishes
+  return dishes.filter((dish) => [dish.name, dish.category, dish.note, sourceLabels[dish.sourceType]].some((item) => item.toLowerCase().includes(keyword)))
 }
 
-function pickWeightedDish(dishes: Dish[], conditions: TodayConditions) {
+function pickWeightedDish(dishes: Dish[]) {
   if (dishes.length === 0) return null
-  const pool = dishes.flatMap((dish) => Array.from({ length: Math.max(1, scoreDish(dish, conditions)) }, () => dish))
+  const pool = dishes.flatMap((dish) => Array.from({ length: Math.max(1, scoreDish(dish)) }, () => dish))
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-function scoreDish(dish: Dish, conditions: TodayConditions) {
+function scoreDish(dish: Dish) {
   let score = 5
   const { personA, personB } = dish.preferences
   if (personA === 'want' && personB === 'want') score += 5
   else if (personA === 'want' || personB === 'want') score += 2
-  if (conditions.companion !== 'both' && dish.preferences[conditions.companion] === 'want') score += 3
-  if (personA === 'avoid' || personB === 'avoid') score -= 3
-  if (conditions.speed === 'quick' && dish.timeLevel === 'quick') score += 2
   if (dish.favorite) score += 1
   if (dish.lastEatenAt) {
     const days = (Date.now() - new Date(dish.lastEatenAt).getTime()) / 86400000
@@ -893,7 +656,7 @@ function scoreDish(dish: Dish, conditions: TodayConditions) {
   return score
 }
 
-function buildReasons(dish: Dish, conditions: TodayConditions) {
+function buildReasons(dish: Dish) {
   const reasons: string[] = []
   if (dish.preferences.personA === 'want' && dish.preferences.personB === 'want') reasons.push('你们都标记过想吃')
   else if (dish.preferences.personA === 'want') reasons.push('更照顾你的口味')
@@ -903,21 +666,9 @@ function buildReasons(dish: Dish, conditions: TodayConditions) {
     const days = Math.max(1, Math.floor((Date.now() - new Date(dish.lastEatenAt).getTime()) / 86400000))
     reasons.push(`${days} 天没吃过了`)
   }
-  if (conditions.scene !== 'any') reasons.push(`适合${sourceLabels[dish.sourceType]}`)
-  if (dish.timeLevel === 'quick') reasons.push('快一点也能吃好')
-  if (dish.budgetLevel === 'low') reasons.push('预算友好')
+  if (dish.favorite) reasons.push('你们收藏过这道')
+  reasons.push(`适合${sourceLabels[dish.sourceType]}`)
   return reasons.slice(0, 3)
-}
-
-function summarizeConditions(conditions: TodayConditions, hiddenAvoidCount: number) {
-  const parts = [
-    conditions.avoidMode === 'avoid' ? `避开不想吃${hiddenAvoidCount ? ` ${hiddenAvoidCount} 道` : ''}` : '先不管忌口',
-    conditions.scene === 'any' ? '场景都行' : sourceLabels[conditions.scene],
-    conditions.speed === 'any' ? '时间都行' : conditions.speed === 'quick' ? '快一点' : '不着急',
-  ]
-  if (conditions.companion === 'personA') parts.unshift('照顾我')
-  if (conditions.companion === 'personB') parts.unshift('照顾 TA')
-  return parts.join(' · ')
 }
 
 function formatDate(value?: string) {

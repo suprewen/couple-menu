@@ -138,8 +138,7 @@
 }
 
 .tab-bar button,
-button,
-.import-button {
+button {
   font: inherit;
 }
 
@@ -301,59 +300,7 @@ p {
   border-color: rgba(217, 108, 95, 0.45);
 }
 
-.condition-summary {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  border: 2px solid var(--border);
-  border-radius: 24px;
-  padding: 14px 16px;
-  color: var(--text);
-  background: rgba(255, 248, 231, 0.86);
-  box-shadow: 0 8px 20px rgba(63, 51, 40, 0.08);
-  cursor: pointer;
-  text-align: left;
-}
-
-.condition-summary span:first-child {
-  border-radius: 999px;
-  padding: 7px 11px;
-  color: var(--primary-dark);
-  background: #e6f0d6;
-  font-weight: 900;
-}
-
-.condition-summary span:nth-child(2) {
-  color: var(--muted);
-}
-
-.condition-summary strong {
-  color: var(--primary-dark);
-}
-
-.condition-panel {
-  background: rgba(243, 226, 184, 0.86);
-}
-
-.segmented-group,
-.chip-group {
-  margin: 16px 0;
-}
-
-.segmented-group > span,
-.chip-group > span {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 900;
-}
-
-.segmented-group > div,
-.chip-group > div,
-.tag-list,
+.meta-line,
 .button-row,
 .recent-strip,
 .tool-row {
@@ -362,9 +309,6 @@ p {
   gap: 8px;
 }
 
-.segmented-group button,
-.chip-group button,
-.tag-list span,
 .category-badge {
   border: 2px solid var(--border);
   border-radius: 999px;
@@ -376,19 +320,35 @@ p {
   font-weight: 800;
 }
 
-.segmented-group button.active,
-.chip-group button.active,
 .category-badge {
   color: var(--primary-dark);
   border-color: rgba(127, 176, 105, 0.55);
   background: #e6f0d6;
 }
 
+.meta-line {
+  align-items: center;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.meta-line span {
+  border-radius: 999px;
+  padding: 7px 11px;
+  color: var(--primary-dark);
+  background: #edf5de;
+}
+
+.meta-line small {
+  max-width: min(520px, 100%);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .primary-button,
 .secondary-button,
 .ghost-button,
-.danger-button,
-.import-button {
+.danger-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -413,8 +373,7 @@ p {
   box-shadow: inset 0 -5px 0 rgba(79, 127, 82, 0.34), 0 8px 0 rgba(79, 127, 82, 0.12);
 }
 
-.ghost-button,
-.import-button {
+.ghost-button {
   color: var(--text);
   border-color: var(--border);
   background: #fffdf4;
@@ -428,8 +387,7 @@ p {
 .primary-button:hover,
 .secondary-button:hover,
 .ghost-button:hover,
-.danger-button:hover,
-.import-button:hover {
+.danger-button:hover {
   transform: translateY(-2px);
   filter: saturate(1.04);
 }
@@ -437,8 +395,7 @@ p {
 .primary-button:active,
 .secondary-button:active,
 .ghost-button:active,
-.danger-button:active,
-.import-button:active {
+.danger-button:active {
   transform: translateY(2px) scale(0.99);
 }
 
@@ -474,17 +431,6 @@ button:disabled {
   display: grid;
   gap: 14px;
   box-shadow: 0 10px 0 rgba(122, 81, 55, 0.08), 0 14px 24px rgba(63, 51, 40, 0.08);
-}
-
-.maintenance-panel details {
-  border-top: 1px dashed var(--border);
-  padding-top: 14px;
-}
-
-.maintenance-panel summary {
-  cursor: pointer;
-  color: var(--primary-dark);
-  font-weight: 900;
 }
 
 .list-summary {
@@ -590,6 +536,10 @@ button:disabled {
 .dish-note {
   margin: 14px 0;
   min-height: 42px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .dish-footer {
@@ -637,8 +587,7 @@ textarea {
 input:focus,
 select:focus,
 textarea:focus,
-button:focus-visible,
-.import-button:focus-within {
+button:focus-visible {
   outline: 3px solid rgba(127, 176, 105, 0.34);
   outline-offset: 2px;
 }
@@ -691,18 +640,6 @@ button:focus-visible,
 .form-actions {
   justify-content: flex-end;
   margin-top: 18px;
-}
-
-.import-button {
-  position: relative;
-  overflow: hidden;
-}
-
-.import-button input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .wrap {
@@ -802,10 +739,6 @@ button:focus-visible,
   .dish-card,
   .dish-form {
     border-radius: 22px;
-  }
-
-  .condition-summary {
-    grid-template-columns: 1fr;
   }
 
   .button-row > *,
