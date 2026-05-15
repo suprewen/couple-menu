@@ -142,6 +142,15 @@ button {
   font: inherit;
 }
 
+button {
+  box-sizing: border-box;
+  min-height: 44px;
+  min-width: 44px;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .tab-bar button {
   flex: 1;
   border: 0;
@@ -384,19 +393,21 @@ p {
   background: var(--danger);
 }
 
-.primary-button:hover,
-.secondary-button:hover,
-.ghost-button:hover,
-.danger-button:hover {
-  transform: translateY(-2px);
-  filter: saturate(1.04);
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:hover,
+  .secondary-button:hover,
+  .ghost-button:hover,
+  .danger-button:hover {
+    transform: translateY(-2px);
+    filter: saturate(1.04);
+  }
 }
 
 .primary-button:active,
 .secondary-button:active,
 .ghost-button:active,
 .danger-button:active {
-  transform: translateY(2px) scale(0.99);
+  transform: translateY(1px);
 }
 
 button:disabled {
@@ -457,9 +468,11 @@ button:disabled {
 .dish-card:nth-child(3n + 1) { --tilt: -0.4deg; }
 .dish-card:nth-child(3n + 2) { --tilt: 0.5deg; }
 
-.dish-card:hover {
-  transform: translateY(-2px) rotate(var(--tilt, 0deg));
-  box-shadow: 0 18px 0 rgba(122, 81, 55, 0.10), 0 24px 38px rgba(63, 51, 40, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .dish-card:hover {
+    transform: translateY(-2px) rotate(var(--tilt, 0deg));
+    box-shadow: 0 18px 0 rgba(122, 81, 55, 0.10), 0 24px 38px rgba(63, 51, 40, 0.15);
+  }
 }
 
 .icon-button,
@@ -474,11 +487,16 @@ button:disabled {
 .icon-button {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 14px;
   background: rgba(242, 201, 76, 0.26);
   font-size: 1.3rem;
+}
+
+.text-button {
+  min-width: 52px;
+  padding: 8px 0;
 }
 
 .dish-note {
@@ -673,6 +691,10 @@ button:focus-visible {
 }
 
 @media (max-width: 620px) {
+  .app-shell {
+    padding: 14px;
+  }
+
   .wood-sign {
     padding: 20px;
     border-radius: 24px;
@@ -683,14 +705,53 @@ button:focus-visible {
     gap: 8px;
   }
 
+  .tab-bar button {
+    min-height: 48px;
+    padding: 12px 10px;
+  }
+
+  .form-header {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .form-header .icon-button {
+    flex: 0 0 44px;
+  }
+
   .panel,
   .dish-card,
   .dish-form {
     border-radius: 22px;
   }
 
+  .button-row {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .result-card .button-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .empty-decision .button-row {
+    grid-template-columns: 1fr;
+  }
+
   .button-row > *,
   .form-actions > * {
     width: 100%;
+  }
+
+  .form-actions .primary-button {
+    order: 1;
+  }
+
+  .form-actions .ghost-button {
+    order: 2;
+  }
+
+  .form-actions .danger-button {
+    order: 3;
   }
 }
