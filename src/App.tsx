@@ -86,6 +86,11 @@ const preferenceIcons: Record<Preference, string> = {
   avoid: '×',
 }
 
+const sourceTypes: SourceType[] = ['home', 'delivery', 'restaurant', 'convenience']
+const budgetLevels: BudgetLevel[] = ['low', 'medium', 'high']
+const timeLevels: TimeLevel[] = ['quick', 'normal', 'slow']
+const preferences: Preference[] = ['want', 'neutral', 'avoid']
+
 const defaultDishes: Dish[] = [
   makeDish('番茄牛腩饭', '家常', ['热乎', '米饭', '下饭'], 'home', 'medium', 'normal', '适合周末多炖一点，第二天也好吃。', 'want', 'want', true, daysAgo(8)),
   makeDish('麻辣烫', '外卖', ['辣', '热乎', '快手'], 'delivery', 'medium', 'quick', '下雨天尤其适合，记得少放丸子。', 'want', 'neutral', false, daysAgo(2)),
@@ -299,8 +304,8 @@ function App() {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const parsed = JSON.parse(String(reader.result)) as Dish[]
-        if (!Array.isArray(parsed)) throw new Error('invalid')
+        const parsed = parseDishArray(JSON.parse(String(reader.result)))
+        if (parsed.length === 0) throw new Error('invalid')
         setDishes(parsed)
         showToast('菜单已导入')
       } catch {
@@ -405,11 +410,64 @@ function loadDishes() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (!stored) return defaultDishes
-    const parsed = JSON.parse(stored) as Dish[]
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : defaultDishes
+    const parsed = parseDishArray(JSON.parse(stored))
+    return parsed.length > 0 ? parsed : defaultDishes
   } catch {
     return defaultDishes
   }
+}
+
+function parseDishArray(value: unknown): Dish[] {
+  if (!Array.isArray(value)) return []
+  return value.map(normalizeDish).filter((dish): dish is Dish => dish !== null)
+}
+
+function normalizeDish(value: unknown): Dish | null {
+  if (!isRecord(value) || typeof value.name !== 'string' || !value.name.trim()) return null
+
+  const preferencesRecord = isRecord(value.preferences) ? value.preferences : {}
+  const now = new Date().toISOString()
+  const tags = Array.isArray(value.tags) ? value.tags.filter((tag): tag is string => typeof tag === 'string').map((tag) => tag.trim()).filter(Boolean) : []
+  const lastEatenAt = typeof value.lastEatenAt === 'string' && !Number.isNaN(Date.parse(value.lastEatenAt)) ? value.lastEatenAt : undefined
+
+  return {
+    id: typeof value.id === 'string' && value.id.trim() ? value.id : crypto.randomUUID(),
+    name: value.name.trim(),
+    category: typeof value.category === 'string' && value.category.trim() ? value.category.trim() : '家常',
+    tags,
+    sourceType: isSourceType(value.sourceType) ? value.sourceType : 'home',
+    budgetLevel: isBudgetLevel(value.budgetLevel) ? value.budgetLevel : 'medium',
+    timeLevel: isTimeLevel(value.timeLevel) ? value.timeLevel : 'normal',
+    note: typeof value.note === 'string' ? value.note : '',
+    preferences: {
+      personA: isPreference(preferencesRecord.personA) ? preferencesRecord.personA : 'neutral',
+      personB: isPreference(preferencesRecord.personB) ? preferencesRecord.personB : 'neutral',
+    },
+    favorite: typeof value.favorite === 'boolean' ? value.favorite : false,
+    lastEatenAt,
+    createdAt: typeof value.createdAt === 'string' && !Number.isNaN(Date.parse(value.createdAt)) ? value.createdAt : now,
+    updatedAt: typeof value.updatedAt === 'string' && !Number.isNaN(Date.parse(value.updatedAt)) ? value.updatedAt : now,
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isSourceType(value: unknown): value is SourceType {
+  return typeof value === 'string' && sourceTypes.includes(value as SourceType)
+}
+
+function isBudgetLevel(value: unknown): value is BudgetLevel {
+  return typeof value === 'string' && budgetLevels.includes(value as BudgetLevel)
+}
+
+function isTimeLevel(value: unknown): value is TimeLevel {
+  return typeof value === 'string' && timeLevels.includes(value as TimeLevel)
+}
+
+function isPreference(value: unknown): value is Preference {
+  return typeof value === 'string' && preferences.includes(value as Preference)
 }
 
 function filterDishes(dishes: Dish[], filters: Filters) {
